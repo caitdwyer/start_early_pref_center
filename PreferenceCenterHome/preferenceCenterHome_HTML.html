@@ -1,0 +1,106 @@
+<div id="tfaContent">
+    <div class="wFormContainer">
+        <div class="wFormHeader"></div>
+        <style type="text/css">
+            #tfa_42-L,
+            label[id^="tfa_42["] {
+            width: 331px !important;
+            min-width: 0px;
+            }
+        </style>
+        <div class="">
+            <div class="wForm" id="4632257-WRPR" dir="ltr">
+                <h3 class="wFormTitle" id="4632257-T">Communications Preferences</h3>
+               <div style="text-align: center;"><br><img style="word-spacing: normal;" alt="Start Early logo" src="//www.tfaforms.com/forms/get_image/206807/YggFUtpF8VjT4tMnoBoMzyps0jZbohyRgYciIkxBi3y2BLGAJHMAAxSvjFMYt1IF-LOGO_Start-Early_purple_case-submission.png"></div>
+                %%[IF NOT EMPTY(@message) THEN]%%
+                    <h3>
+                        %%=v(@message)=%%
+                    </h3>
+                %%[ENDIF]%%
+                %%[IF @continueExecution == true THEN]%%
+                %%[IF @isFormSubmitted != true THEN ]%%
+                <form method="post" action="" class="hintsBelow labelsAbove" id="" role="form">
+                  
+                    <div class="htmlSection" id="tfa_29">
+                        <div class="htmlContent" id="tfa_29-HTML">
+                            <h1>Communications Preferences</h1>
+                            Click the button(s) below to update your email preferences.
+                        </div>
+                    </div>
+                    <script runat="server">
+                        Platform.Load("Core","1");
+                        
+                        try{
+                            for (var p = 0; p < preferenceObjects.length; p++){
+                                Platform.Variable.SetValue("@prefApiName", preferenceObjects[p].apiName); // API name for preference name
+                                Platform.Variable.SetValue("@prefApiOptIn", preferenceObjects[p].apiOptInDate); // API name for preference opt-in date
+                                Platform.Variable.SetValue("@prefApiOptOut", preferenceObjects[p].apiOptOutDate); // API name for preference opt-out date
+                        
+                                Platform.Variable.SetValue("@prefName", preferenceObjects[p].displayName); 
+                                Platform.Variable.SetValue("@prefDesc", preferenceObjects[p].displayDescription); 
+                                Platform.Variable.SetValue("@isSubscribed", preferenceObjects[p].isSubscribed); 
+                    </script>
+                    <div class="htmlSection" id="tfa_115">
+                        <div class="htmlContent" id="tfa_115-HTML">%%=v(@prefDesc)=%%</div>
+                    </div>
+                    <table class="matrixLayout ">
+                        <thead>
+                            <tr class="headerRow" id="tfa_65-MTRX">
+                                <th></th>
+                                <th scope="col">Unsubscribed</th>
+                                <th scope="col">Subscribed</th>
+                            </tr>
+                        </thead>
+                        <tr id="tfa_111" class="oneField  repeat alternate-1" role="radiogroup" aria-labelledby="%%=v(@prefApiName)=%%" data-tfa-labelledby="-L %%=v(@prefApiName)=%%">
+                            <th scope="row" class="headerCol"><label id="%%=v(@prefApiName)=%%" for="%%=v(@prefApiName)=%%" class="label "><b>%%=v(@prefName)=%%</b></label></th>
+                            <td><span class="oneChoice"><input type="radio" value="unsubscribed" name="%%=v(@prefApiName)=%%" title="Unsubscribed" %%[IF @isSubscribed == false THEN]%%checked%%[ENDIF]%%></span></td>
+                            <td><span class="oneChoice"><input type="radio" value="subscribed" name="%%=v(@prefApiName)=%%" title="Subscribed" %%[IF @isSubscribed == true THEN]%%checked%%[ENDIF]%%></span></td>
+                        </tr>
+                    </table>
+                    <script runat="server">
+                        }
+                        } catch(e){
+                        Platform.Response.Write(e); ;
+                        }
+                    </script>
+                    <div class="oneField field-container-D    " id="tfa_68-D">
+                        <label id="tfa_68-L" class="label preField " for="tfa_68">Contact Id</label><br>
+                        <div class="inputWrapper"><input type="text" id="tfa_68" name="tfa_68" value="0033t000030aANCAA2" title="Contact Id" class=""></div>
+                    </div>
+                    <div class="oneField field-container-D   hintsTooltip " id="tfa_42-D" role="group" aria-labelledby="tfa_42-L" data-tfa-labelledby="-L tfa_42-L">
+                        <label id="tfa_42-L" class="label preField "><b>Unsubscribe from All Communication</b></label><br>
+                        <div class="inputWrapper">
+                            <div class="delimiter delimiterBefore" id="tfa_42-DB">If you wish to unsubscribe from ALL communications, check the box and click the update button below.&nbsp;To resubscribe, uncheck the box and click the update button below.&nbsp;</div>
+                            <span id="tfa_42" class="choices vertical ">
+                            <span class="oneChoice">
+                            <input type="checkbox" value="true" id="emailOptOut" name="emailOptOut" aria-labelledby="emailOptOut-L" data-tfa-labelledby="emailOptOut-L emailOptOut-L" %%[IF @currentAllSubsStatus == 'unsubscribed' THEN]%%checked%%[ENDIF]%%>
+                            <label class="label postField" id="emailOptOut-L" for="emailOptOut">
+                            <span class="input-checkbox-faux">
+                            </span>
+                            <i>I do not wish to receive any future email communications&nbsp;from Start Early.</i>
+                            </label>
+                            </span>
+                            </span>
+                        </div>
+                    </div>
+                    <div class="oneField field-container-D    " id="tfa_116-D">
+                        <label id="tfa_116-L" class="label preField " for="tfa_116">Email Name</label><br>
+                        <div class="inputWrapper"><input type="text" id="tfa_116" name="tfa_116" value="eNews_0620" title="Email Name" class=""></div>
+                    </div>
+                    <div class="actions" id="4632257-A">
+                        <input type="hidden" name="formSubmitted" value="true">
+                        <input type="submit" data-label="Update Preferences" class="primaryAction" id="submit_button" value="Update Preferences">
+                    </div>
+                    <div style="clear:both"></div>
+                </form>
+                %%[ ENDIF ]%%
+                %%[ENDIF]%%
+            </div>
+        </div>
+        <div class="wFormFooter">
+            <p class="supportInfo"><br></p>
+        </div>
+        <p class="supportInfo">
+        </p>
+    </div>
+</div>

@@ -1,0 +1,221 @@
+<div style="display:none;">
+<script runat="server">
+    Platform.Load("Core","1");
+</script>
+
+%%[ 
+    SET @continueExecution = true
+    SET @subscriberKey = REQUESTPARAMETER('s')
+    SET @isFormSubmitted = REQUESTPARAMETER('formSubmitted')
+    SET @errorMessageText = LOOKUP('MessageText', 'Content', 'Event', 'onError')
+
+    IF EMPTY(@subscriberKey) THEN
+        SET @continueExecution = false
+        SET @message = @errorMessageText
+        /* TODO: Log to debug text field on Contact - Subscriber Key @subscriberKey not found */
+        CreateSalesforceObject(
+            "Error_Log__c", 2,
+            "Source__c", "Preference Center",
+            "Message__c", "Missing Subscriber Key."
+        )
+    /*ELSEIF (LENGTH(@subscriberKey) != 15 AND LENGTH(@subscriberKey) != 18) OR SUBSTRING(@subscriberKey, 1, 3) != '003' THEN*/
+    ELSEIF LENGTH(@subscriberKey) != 18 OR SUBSTRING(@subscriberKey, 1, 3) != '003' THEN
+     SET @continueExecution = false
+     SET @message = @errorMessageText
+        CreateSalesforceObject(
+              "Error_Log__c", 2,
+              "Source__c", "Preference Center",
+              "Message__c", CONCAT("Subscriber Key ", @subscriberKey, " is not valid or is not 18 character ID.")
+             )
+    ELSE
+      /* Check current status in All Subs */
+        SET @currentAllSubsStatus = LOOKUP('ent._Subscribers', 'Status', 'SubscriberKey', @subscriberKey) /* TODO: This pulls status from parent BU, since The Ounce has only one BU, it should work */
+
+        IF EMPTY(@currentAllSubsStatus) THEN
+         SET @continueExecution = false
+         SET @message = @errorMessageText
+            CreateSalesforceObject(
+               "Error_Log__c", 3,
+               "Contact__c", @subscriberKey,
+               "Source__c", "Preference Center",
+               "Message__c", CONCAT("Subscriber status for Subscriber Key ", @subscriberKey, " not found in All Subscribers List.")
+              )
+
+        ELSEIF @currentAllSubsStatus == 'unsubscribed' THEN
+            SET @continueExecution = false
+            SET @message = LOOKUP('MessageText', 'Content', 'Event', 'onUnsubscribedAllSubs')
+        ELSEIF @currentAllSubsStatus != 'active' THEN
+            /* Held, Bounced etc. */
+            SET @continueExecution = false
+                SET @message = @errorMessageText
+                CreateSalesforceObject(
+                "Error_Log__c", 3,
+                "Contact__c", @subscriberKey,
+                "Source__c", "Preference Center",
+                "Message__c", CONCAT("Subscriber status for Subscriber Key ", @subscriberKey, " in All Subscribers List is not active or unsubscribed.")
+               )
+        ENDIF
+    ENDIF
+
+    /* Pref Center URL parameters: ?j=jobid&b=_JobSubscriberBatchID&s=_subscriberkey */
+
+    IF @continueExecution == true THEN
+            /************************** START: Retrieve/Update Preference Details ***************************************** */
+            /* Retrieve all active preferences from preferences DE in SFMC */
+            SET @preferenceRows = LOOKUPROWS('Preferences', 'Is_Active', 'True')
+
+            IF ROWCOUNT(@preferenceRows) > 0 THEN
+            ]%%
+            <script runat="server">
+                preferenceObjects = new Array();
+            </script>
+            %%[
+                FOR @i = 1 TO ROWCOUNT(@preferenceRows) DO
+                    SET @tempPrefApiName = FIELD(ROW(@preferenceRows, @i), 'Preference_API_Name')
+                    SET @tempPrefApiOptIn = FIELD(ROW(@preferenceRows, @i), 'Opt-in_Date_API_Name')
+                    SET @tempPrefApiOptOut = FIELD(ROW(@preferenceRows, @i), 'Opt-out_Date_API_Name')
+
+                    SET @tempPrefName = FIELD(ROW(@preferenceRows, @i), 'Name')
+                    SET @tempPrefDescription = FIELD(ROW(@preferenceRows, @i), 'Description')
+
+                    IF NOT EMPTY(@tempPrefApiName) THEN 
+                        /* Retrieve status for tempPrefApiName from SFDC Contact */
+                        SET @sfdcContactRecord = RetrieveSalesforceObjects('Contact', @tempPrefApiName, 'Id', '=', @subscriberKey)
+                        IF ROWCOUNT(@sfdcContactRecord) > 0 THEN
+                            SET @tempPrefStatus = FIELD(ROW(@sfdcContactRecord, 1), @tempPrefApiName)
+        ]%%
+                        <script runat="server">
+                            Platform.Load("Core","1");
+
+                            var prefObj = new Object();
+                            prefObj.apiName = Variable.GetValue("@tempPrefApiName");
+                            prefObj.apiOptInDate = Variable.GetValue("@tempPrefApiOptIn");
+                            prefObj.apiOptOutDate = Variable.GetValue("@tempPrefApiOptOut");
+                            prefObj.displayName = Variable.GetValue("@tempPrefName");
+                            prefObj.displayDescription = Variable.GetValue("@tempPrefDescription");
+                            prefObj.isSubscribed = Variable.GetValue("@tempPrefStatus");
+
+                            preferenceObjects.push(prefObj); // add new preference object to array
+
+                        </script>
+        %%[         
+                        ENDIF
+                    ENDIF
+                NEXT @i
+]%%
+
+                <script runat='server'>
+                    for (var i=0; i<preferenceObjects.length; i++){
+                        Write(preferenceObjects[i].apiName + '<br>');
+                    }
+            </script>
+%%[
+            ELSE
+                /* No Preferences in DE */
+            ENDIF
+        ENDIF
+        /************************** END: Retrieve/Update Preference Details ***************************************** */
+
+        
+        IF @isFormSubmitted == true THEN
+            /************************** START: Process Form Submission ***************************************** */     
+            SET @isGloballyUnsubscribed = REQUESTPARAMETER('emailOptOut')
+            SET @jobId = REQUESTPARAMETER('j') /*required*/
+            SET @batchId = REQUESTPARAMETER('b')
+            SET @isLogUnsubUnsubSuccess = false /* Check is LogUnsubEvent API call successful */
+            SET @isAllSubUnsubSuccess = false /* Checks if unsubscribe from All Subs is successful, default to true if LogUnsubEvent API successful */
+
+            IF @isGloballyUnsubscribed == true THEN
+                Redirect(Concat('https://pub.s4.exacttarget.com/1kqob5wtdlt?s=', @subscriberKey, '&j=', @jobId, '&b=', @batchId))
+            ELSE
+
+                /************************** START: Process Preference Updates ***************************************** */ 
+                SET @contactUpdateString = Concat("%%=UpdateSingleSalesforceObject('Contact', '", @subscriberKey, "'")
+
+        ]%%
+                <script runat="server">
+                    Platform.Load("Core","1");
+
+                    for (var j = 0; j < preferenceObjects.length; j++){
+                        // set the updated subscription status on preference object in array
+                        
+                        Platform.Variable.SetValue("@testVariable", preferenceObjects[j].apiName);
+                        //var updatedStatus = Request.GetFormField(preferenceObjects[j].apiName); // doesn't work
+                        
+                        var updatedStatus = Request.GetFormField(Platform.Variable.GetValue("@testVariable"));
+                        preferenceObjects[j].prefUpdatedStatus = updatedStatus; // will be "unsubscribed" or "subscribed"
+
+                        Platform.Variable.SetValue("@currentPrefApiName", preferenceObjects[j].apiName);
+
+                        var checkboxStatus = true
+                        if (updatedStatus == 'unsubscribed'){
+                            checkboxStatus = false
+                        }
+                        Platform.Variable.SetValue("@currentPrefUpdatedStatus", checkboxStatus);
+                </script>
+
+        %%[
+                        /* append preference status updates to contactUpdateString */
+                        SET @contactUpdateString = Concat(@contactUpdateString, ", '", @currentPrefApiName, "', '", @currentPrefUpdatedStatus, "'")
+
+        ]%%
+                <script runat="server">
+                        Platform.Load("Core","1");
+                        // determine if opt-out date needs to be populated for current preference                      
+try{
+                        if (preferenceObjects[j].prefUpdatedStatus === 'unsubscribed' && preferenceObjects[j].isSubscribed === 'true') {
+                            // user has unsubscribed from this preference => stamp corresponding opt-out date field on Contact (opt-ins will be handled in SFDC by process builder)
+                            Platform.Variable.SetValue("@currentPrefOptOutDate", preferenceObjects[j].apiOptOutDate);
+
+                </script>
+
+        %%[
+                            /* append current date as opt-out date for current preferent to contactUpdateString */
+                            SET @today = FormatDate(Now(),"iso")
+                            SET @contactUpdateString = Concat(@contactUpdateString, ", '", @currentPrefOptOutDate, "', '", @today, "'")
+
+        ]%%
+
+                <script runat="server">                  
+                        } 
+
+
+    }catch(e){
+        Platform.Variable.SetValue("@debugString", Stringify(e));
+        Write(Stringify(e));
+    }
+}
+</script>
+
+        %%[ 
+                /* Execute update on Contact record in SFDC */
+                SET @contactUpdateString = Concat(@contactUpdateString, ")=%%")
+                SET @contactUpdateResult = TreatAsContent(@contactUpdateString)
+
+                IF @contactUpdateResult == 1 THEN
+                 SET @message = LOOKUP('MessageText', 'Content', 'Event', 'onPreferenceUpdateSuccess')
+                ELSE
+                 SET @continueExecution = false
+                    SET @message = @errorMessageText
+                    CreateSalesforceObject(
+                "Error_Log__c", 3,
+                "Contact__c", @subscriberKey,
+                "Source__c", "Preference Center",
+                "Message__c", CONCAT("Error updating Contact record for Subscriber Key ", @subscriberKey, "\nContact Update String: ", @contactUpdateString)
+               )
+                ENDIF
+
+                /************************** END: Process Preference Updates ***************************************** */ 
+            ENDIF
+            
+            /************************** END: Process Form Submission ***************************************** */ 
+        ENDIF
+    ENDIF    
+    ]%%
+
+    <script runat="server">
+        }catch(e){
+            Write(Stringify(e));
+        }
+    </script>
+</div>

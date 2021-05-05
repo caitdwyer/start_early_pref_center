@@ -1,0 +1,201 @@
+ <div style='display: none'>
+<script runat="server">
+    Platform.Load("Core","1");
+</script>
+    %%[
+        SET @subscriberKey = REQUESTPARAMETER('s')
+        SET @jobId = REQUESTPARAMETER("j") 
+
+        SET @errorMessageText = LOOKUP('MessageText', 'Content', 'Event', 'onError')
+        SET @isLogUnsubUnsubSuccess = false /* Check is LogUnsubEvent API call successful */
+        SET @isAllSubUnsubSuccess = false /* Checks if unsubscribe from All Subs is successful, default to true if LogUnsubEvent API successful */
+
+        /*************************** START: Retrieve all active preferences from preferences DE in SFMC ***************************/
+        SET @preferenceRows = LOOKUPROWS('Preferences', 'Is_Active', 'True')
+
+        IF ROWCOUNT(@preferenceRows) > 0 THEN
+        ]%%
+        <script runat="server">
+            preferenceObjects = new Array();
+        </script>
+        %%[
+            FOR @i = 1 TO ROWCOUNT(@preferenceRows) DO
+                SET @tempPrefApiName = FIELD(ROW(@preferenceRows, @i), 'Preference_API_Name')
+                SET @tempPrefApiOptIn = FIELD(ROW(@preferenceRows, @i), 'Opt-in_Date_API_Name')
+                SET @tempPrefApiOptOut = FIELD(ROW(@preferenceRows, @i), 'Opt-out_Date_API_Name')
+
+                SET @tempPrefName = FIELD(ROW(@preferenceRows, @i), 'Name')
+                SET @tempPrefDescription = FIELD(ROW(@preferenceRows, @i), 'Description')
+
+                IF NOT EMPTY(@tempPrefApiName) THEN 
+                    /* Retrieve status for tempPrefApiName from SFDC Contact */
+                    SET @sfdcContactRecord = RetrieveSalesforceObjects('Contact', @tempPrefApiName, 'Id', '=', @subscriberKey)
+                    IF ROWCOUNT(@sfdcContactRecord) > 0 THEN
+                        SET @tempPrefStatus = FIELD(ROW(@sfdcContactRecord, 1), @tempPrefApiName)
+    ]%%
+                    <script runat="server">
+                        Platform.Load("Core","1");
+
+                        var prefObj = new Object();
+                        prefObj.apiName = Variable.GetValue("@tempPrefApiName");
+                        prefObj.apiOptInDate = Variable.GetValue("@tempPrefApiOptIn");
+                        prefObj.apiOptOutDate = Variable.GetValue("@tempPrefApiOptOut");
+                        prefObj.displayName = Variable.GetValue("@tempPrefName");
+                        prefObj.displayDescription = Variable.GetValue("@tempPrefDescription");
+                        prefObj.isSubscribed = Variable.GetValue("@tempPrefStatus");
+
+                        preferenceObjects.push(prefObj); // add new preference object to array
+                    </script>
+    %%[         
+                    ENDIF
+                ENDIF
+            NEXT @i
+
+        ELSE
+            /* No Preferences in DE */
+        ENDIF
+        /*************************** END: Retrieve all active preferences from preferences DE in SFMC ***************************/
+
+
+        /************************** START: Process Global Unsubscribe ***************************************** */ 
+        SET @contactUnsubscribeString = Concat("%%=UpdateSingleSalesforceObject('Contact', '", @subscriberKey, "'")
+
+        /************************** START: LogUnsubEvent ***************************************** */ 
+        IF NOT EMPTY(@jobId) THEN
+            SET @listId = 110858 /*all subs id*/
+            SET @batchId = REQUESTPARAMETER("b")
+            SET @reason = "Preference Center Unsubscribe"
+
+            SET @lue = CreateObject("ExecuteRequest")
+            SetObjectProperty(@lue,"Name","LogUnsubEvent")
+
+            SET @lue_prop = CreateObject("APIProperty")                 
+            SetObjectProperty(@lue_prop, "Name", "SubscriberKey")
+            SetObjectProperty(@lue_prop, "Value", @subscriberKey)
+            AddObjectArrayItem(@lue, "Parameters", @lue_prop)
+
+            SET @lue_prop = CreateObject("APIProperty")
+            SetObjectProperty(@lue_prop, "Name", "JobID")
+            SetObjectProperty(@lue_prop, "Value", @jobId)
+            AddObjectArrayItem(@lue, "Parameters", @lue_prop)
+
+            SET @lue_prop = CreateObject("APIProperty")
+            SetObjectProperty(@lue_prop, "Name", "ListID")
+            SetObjectProperty(@lue_prop, "Value", @listId)
+            AddObjectArrayItem(@lue, "Parameters", @lue_prop)
+
+            IF NOT EMPTY(@batchId) THEN
+                SET @lue_prop = CreateObject("APIProperty")
+                SetObjectProperty(@lue_prop, "Name", "BatchID")
+                SetObjectProperty(@lue_prop, "Value", @batchId)
+                AddObjectArrayItem(@lue, "Parameters", @lue_prop)
+            ENDIF
+
+            SET @lue_prop = CreateObject("APIProperty")
+            SetObjectProperty(@lue_prop, "Name", "Reason")
+            SetObjectProperty(@lue_prop, "Value", @reason)
+            AddObjectArrayItem(@lue, "Parameters", @lue_prop)
+
+            SET @lue_statusCode = InvokeExecute(@lue, @overallStatus, @requestId)
+
+            SET @Response = Row(@lue_statusCode, 1)
+            SET @Status = Field(@Response,"StatusMessage")
+            SET @Error = Field(@Response,"ErrorCode")
+
+            IF (@Error == '12012') OR (@Error == '401') OR (@Status == 'Event posted') THEN
+                /* Succeeded */
+                SET @isLogUnsubUnsubSuccess = true
+                SET @isAllSubUnsubSuccess = true
+            ELSE
+                /* Failed */
+                SET @isLogUnsubUnsubSuccess = false
+                SET @isAllSubUnsubSuccess = false
+
+                /* TODO:Log Error processing LogUnsubEvent API call @Error @Status*/
+            ENDIF
+        ENDIF
+        /************************** END: LogUnsubEvent ***************************************** */ 
+
+
+        /************************** START: All Subs Unsubscribe API Call ***************************************** */ 
+        IF EMPTY(@jobId) OR @isLogUnsubUnsubSuccess == false THEN
+            /* Job Id not available or LogUnsubEvent failed - perform unsubscribe without logunsub */
+            
+            SET @subscriber = CreateObject("Subscriber")
+            SetObjectProperty(@subscriber, "SubscriberKey", @subscriberKey)
+            SetObjectProperty(@subscriber, "Status", "Unsubscribed")
+
+            SET @options = CreateObject("UpdateOptions")
+
+            SET @save = CreateObject("SaveOption")
+            SetObjectProperty(@save,"SaveAction","UpdateAdd")
+            SetObjectProperty(@save,"PropertyName","*")
+            AddObjectArrayItem(@options,"SaveOptions", @save)
+
+            SET @status = InvokeUpdate(@subscriber, @errorMsg, @errorCode, @options)
+
+            IF @status == 'OK' THEN
+                SET @message = LOOKUP('MessageText', 'Content', 'Event', 'onUnsubscribeSuccess')
+                SET @isAllSubUnsubSuccess = true
+            ELSE
+                SET @isAllSubUnsubSuccess = false
+                SET @message = @errorMessageText /*TODO: Log - Error Unsubscribing from All Subscribers List @errorMsg @errorCode */
+                CreateSalesforceObject(
+                    "Error_Log__c", 3,
+                    "Contact__c", @subscriberKey,
+                    "Source__c", "Preference Center",
+                    "Message__c", CONCAT("Error unsubscribing from All Subscribers list for Subscriber Key ", @subscriberKey, "\nError Code: ", @errorCode, "\nError Message: ", @errorMsg)
+                )
+            ENDIF
+        ENDIF
+        /************************** END: All Subs Unsubscribe API Call ***************************************** */ 
+
+        IF @isAllSubUnsubSuccess == true THEN
+            /************************** START: Clear Contact Preferences and Set Opt-Out Date ***************************************** */ 
+            SET @today = FormatDate(Now(), "iso")
+]%%
+<script runat="server">
+            //loop through preferences and append 'false' status with opt out date  to @contactUnsubscribeString
+            for (var k = 0; k < preferenceObjects.length; k++){
+                // get status api name and opt out date api name
+                Platform.Variable.SetValue("@currentPrefToUnsubApiName", preferenceObjects[k].apiName);
+                Platform.Variable.SetValue("@currentPrefToUnsubOptOutDate", preferenceObjects[k].apiOptOutDate);
+</script>
+
+                %%[
+                    SET @contactUnsubscribeString = Concat(@contactUnsubscribeString, ", '", @currentPrefToUnsubApiName, "', 'false'")
+                    SET @contactUnsubscribeString = Concat(@contactUnsubscribeString, ", '", @currentPrefToUnsubOptOutDate, "', '", @today, "'")
+                ]%%
+<script runat="server">   
+            }
+</script>
+
+
+%%[
+
+        /* update email opt out date and checkbox in SFDC */
+        SET @contactUnsubscribeString = Concat(@contactUnsubscribeString, ", 'HasOptedOutOfEmail', 'true'")  /*TODO: this field is not accessible via dev console in SFDC??*/
+        SET @contactUnsubscribeString = Concat(@contactUnsubscribeString, ", 'c4g_Email_Unsubscribe_Date__c', '", @today, "'")
+        SET @contactUnsubscribeString = Concat(@contactUnsubscribeString, ")=%%")
+
+        SET @debugString = @contactUnsubscribeString
+
+        SET @unsubscribeResult = TreatAsContent(@contactUnsubscribeString)
+       
+        IF @unsubscribeResult == 1 THEN
+            SET @message = LOOKUP('MessageText', 'Content', 'Event', 'onUnsubscribeSuccess')
+        ELSE
+            SET @message = @errorMessageText
+            CreateSalesforceObject(
+            "Error_Log__c", 3,
+            "Contact__c", @subscriberKey,
+            "Source__c", "Preference Center",
+            "Message__c", CONCAT("Error clearing preferences on Contact record for Subscriber Key ", @subscriberKey)
+           )
+        ENDIF                     
+        /************************** END: Clear Contact Preferences and Set Opt-Out Date ***************************************** */ 
+    ENDIF
+  
+    /************************** END: Process Global Unsubscribe ***************************************** */ 
+    ]%%
+    </div>
