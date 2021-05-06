@@ -41,18 +41,17 @@
                                 Platform.Variable.SetValue("@isSubscribed", preferenceObjects[p].isSubscribed); 
                     </script>
                     <div class="htmlSection" id="tfa_115">
+                        <label id="%%=v(@prefApiName)=%%" for="%%=v(@prefApiName)=%%" class="label "><b>%%=v(@prefName)=%%</b></label><br><br>
                         <div class="htmlContent" id="tfa_115-HTML">%%=v(@prefDesc)=%%</div>
                     </div>
                     <table class="matrixLayout ">
                         <thead>
                             <tr class="headerRow" id="tfa_65-MTRX">
-                                <th></th>
                                 <th scope="col">Unsubscribed</th>
                                 <th scope="col">Subscribed</th>
                             </tr>
                         </thead>
                         <tr id="tfa_111" class="oneField  repeat alternate-1" role="radiogroup" aria-labelledby="%%=v(@prefApiName)=%%" data-tfa-labelledby="-L %%=v(@prefApiName)=%%">
-                            <th scope="row" class="headerCol"><label id="%%=v(@prefApiName)=%%" for="%%=v(@prefApiName)=%%" class="label "><b>%%=v(@prefName)=%%</b></label></th>
                             <td><span class="oneChoice"><input type="radio" value="unsubscribed" name="%%=v(@prefApiName)=%%" title="Unsubscribed" %%[IF @isSubscribed == false THEN]%%checked%%[ENDIF]%%></span></td>
                             <td><span class="oneChoice"><input type="radio" value="subscribed" name="%%=v(@prefApiName)=%%" title="Subscribed" %%[IF @isSubscribed == true THEN]%%checked%%[ENDIF]%%></span></td>
                         </tr>
@@ -70,7 +69,7 @@
                     <div class="oneField field-container-D   hintsTooltip " id="tfa_42-D" role="group" aria-labelledby="tfa_42-L" data-tfa-labelledby="-L tfa_42-L">
                         <label id="tfa_42-L" class="label preField "><b>Unsubscribe from All Communication</b></label><br>
                         <div class="inputWrapper">
-                            <div class="delimiter delimiterBefore" id="tfa_42-DB">If you wish to unsubscribe from ALL communications, check the box and click the update button below.&nbsp;To resubscribe, uncheck the box and click the update button below.&nbsp;</div>
+                            <div class="delimiter delimiterBefore" id="tfa_42-DB">If you wish to unsubscribe from ALL communications, check the box and click the update button below.&nbsp;</div><br><br>
                             <span id="tfa_42" class="choices vertical ">
                             <span class="oneChoice">
                             <input type="checkbox" value="true" id="emailOptOut" name="emailOptOut" aria-labelledby="emailOptOut-L" data-tfa-labelledby="emailOptOut-L emailOptOut-L" %%[IF @currentAllSubsStatus == 'unsubscribed' THEN]%%checked%%[ENDIF]%%>
